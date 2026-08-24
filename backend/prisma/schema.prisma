@@ -1,0 +1,122 @@
+// Prisma schema — SQLite for local dev, no external database needed.
+// See /docs/v1-scope-and-architecture.md for the reasoning behind this model.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A single local user for now — no auth in v1, single-user local app.
+model User {
+  id                    String   @id @default(cuid())
+  name                  String
+  universityId          String
+  university            University @relation(fields: [universityId], references: [id])
+  currentYear           Int
+  targetClassification  String   // e.g. "First", "2:1", "2:2"
+  createdAt             DateTime @default(now())
+
+  modules          Module[]
+  commitmentBlocks CommitmentBlock[]
+  workLogs         WorkLog[]
+}
+
+model University {
+  id                   String   @id @default(cuid())
+  name                 String
+  classificationScheme ClassificationScheme?
+  users                User[]
+}
+
+// The core differentiator: each university's real classification rules,
+// stored as config rather than hardcoded logic, so the calculation engine
+// can support multiple universities without rewriting the math each time.
+model ClassificationScheme {
+  id           String     @id @default(cuid())
+  universityId String     @unique
+  university   University @relation(fields: [universityId], references: [id])
+
+  // JSON string holding: year weightings, module weighting method,
+  // exclusion rules (e.g. year 1 not counted), classification band
+  // thresholds (First/2:1/2:2/Third), and any "best of" or floor rules.
+  // Parsed/validated in code via a zod schema — see src/engine.
+  rulesJson String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Module {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+  name    String
+  credits Int
+  year    Int
+
+  assessmentComponents AssessmentComponent[]
+
+  createdAt DateTime @default(now())
+}
+
+model AssessmentComponent {
+  id            String   @id @default(cuid())
+  moduleId      String
+  module        Module   @relation(fields: [moduleId], references: [id])
+  name          String
+  weightingPct  Float
+  type          String   // "coursework" | "exam"
+  deadline      DateTime
+  mark          Float?   // null until graded
+  status        String   @default("pending") // "pending" | "in_progress" | "submitted" | "graded"
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Task {
+  id                     String               @id @default(cuid())
+  assessmentComponentId  String
+  assessmentComponent    AssessmentComponent  @relation(fields: [assessmentComponentId], references: [id])
+  title                  String
+  type                   String   // "research" | "draft" | "revise" | "practice" | "submit"
+  estimatedMinutes       Int
+  actualMinutes          Int?
+  scheduledStart         DateTime?
+  status                 String   @default("pending") // "pending" | "scheduled" | "done" | "skipped"
+
+  workLogs WorkLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Fixed commitments (classes, work shifts) the scheduler plans around.
+model CommitmentBlock {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  label     String   // e.g. "Lectures", "Part-time job"
+  dayOfWeek Int      // 0 = Sunday ... 6 = Saturday
+  startTime String   // "09:00"
+  endTime   String   // "10:00"
+}
+
+// The seed of the adaptive/personalization engine: real recorded work
+// sessions, which later get used to learn pace, productive times of day,
+// and which subjects take longer than estimated.
+model WorkLog {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  taskId    String
+  task      Task      @relation(fields: [taskId], references: [id])
+  startedAt DateTime
+  endedAt   DateTime?
+}
