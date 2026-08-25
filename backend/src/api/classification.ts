@@ -68,11 +68,20 @@ classificationRouter.get("/status", async (_req, res) => {
   const incompleteYears: number[] = [];
 
   for (const [year, moduleMarks] of moduleMarksByYear.entries()) {
-    const average = calculateYearAverage(moduleMarks);
-    if (average === null) {
+    try {
+      const average = calculateYearAverage(moduleMarks);
+      if (average === null) {
+        incompleteYears.push(year);
+      } else {
+        completedYears.push({ year, average });
+      }
+    } catch (err) {
+      // A module with bad/incomplete data (e.g. no components yet, or
+      // weightings that don't sum to 100) shouldn't be able to crash
+      // the whole server — treat that year as incomplete and surface
+      // a clear warning instead of dying silently.
+      console.error(`Year ${year} calculation error:`, err instanceof Error ? err.message : err);
       incompleteYears.push(year);
-    } else {
-      completedYears.push({ year, average });
     }
   }
 
