@@ -4,7 +4,6 @@ import { kentClassificationScheme } from "../src/engine/schemes/kent";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Upsert so running the seed script twice doesn't create duplicates.
   const kent = await prisma.university.upsert({
     where: { id: "kent" },
     update: {},
@@ -25,7 +24,21 @@ async function main() {
     },
   });
 
-  console.log("Seeded University of Kent with its classification scheme.");
+  // A single local user, since v1 has no auth — this stands in for
+  // "you" until multi-user support is ever built.
+  await prisma.user.upsert({
+    where: { id: "local-user" },
+    update: {},
+    create: {
+      id: "local-user",
+      name: "Local User",
+      universityId: kent.id,
+      currentYear: 3,
+      targetClassification: "First",
+    },
+  });
+
+  console.log("Seeded University of Kent, its classification scheme, and a local user.");
 }
 
 main()
