@@ -14,6 +14,8 @@ import {
   deleteCommitmentBlock,
   generateTasks,
   getSchedule,
+  getRecommendation,
+  RecommendationResponse,
 } from "./api";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -39,6 +41,7 @@ export default function App() {
   const [status, setStatus] = useState<ClassificationStatus | null>(null);
   const [commitmentBlocks, setCommitmentBlocks] = useState<CommitmentBlock[]>([]);
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
+  const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,16 +57,18 @@ export default function App() {
   async function refreshAll() {
     setError(null);
     try {
-      const [modulesData, statusData, blocksData, scheduleData] = await Promise.all([
+      const [modulesData, statusData, blocksData, scheduleData, recommendationData] = await Promise.all([
         getModules(),
         getClassificationStatus(),
         getCommitmentBlocks(),
         getSchedule(),
+        getRecommendation(),
       ]);
       setModules(modulesData);
       setStatus(statusData);
       setCommitmentBlocks(blocksData);
       setSchedule(scheduleData);
+      setRecommendation(recommendationData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -119,6 +124,33 @@ export default function App() {
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
       <h1>Academic Strategist</h1>
+
+      {recommendation?.recommendation && (
+        <section
+          style={{
+            marginBottom: 32,
+            padding: 24,
+            background: "#1a1a1a",
+            color: "#fff",
+            borderRadius: 12,
+          }}
+        >
+          <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.05em", color: "#aaa", marginBottom: 8 }}>
+            Right now
+          </div>
+          <h2 style={{ margin: "0 0 8px 0" }}>{recommendation.recommendation.task.title}</h2>
+          <p style={{ margin: 0, color: "#ddd" }}>{recommendation.recommendation.explanation}</p>
+          <p style={{ margin: "8px 0 0 0", fontSize: 14, color: "#999" }}>
+            Estimated {recommendation.recommendation.task.estimatedMinutes} minutes
+          </p>
+        </section>
+      )}
+
+      {recommendation && !recommendation.recommendation && (
+        <section style={{ marginBottom: 32, padding: 24, background: "#f0f0f0", borderRadius: 12 }}>
+          <p style={{ margin: 0, color: "#666" }}>{recommendation.message}</p>
+        </section>
+      )}
 
       {error && (
         <p style={{ color: "#b00020", background: "#fde8e8", padding: 12, borderRadius: 6 }}>

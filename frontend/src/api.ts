@@ -163,3 +163,25 @@ export async function getSchedule(): Promise<ScheduleResponse> {
   const res = await fetch("/api/schedule");
   return handleResponse(res);
 }
+
+export interface RecommendationResponse {
+  recommendation: {
+    task: {
+      id: string;
+      title: string;
+      estimatedMinutes: number;
+      deadline: string;
+      weightingPct: number;
+      assessmentComponentName: string;
+      moduleName: string;
+    };
+    explanation: string;
+    score: number;
+  } | null;
+  message?: string;
+}
+
+export async function getRecommendation(): Promise<RecommendationResponse> {
+  const res = await fetch("/api/recommendation");
+  return handleResponse(res);
+}
