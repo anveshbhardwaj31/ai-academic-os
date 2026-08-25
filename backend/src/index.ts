@@ -4,6 +4,7 @@ import { universitiesRouter } from "./api/universities";
 import { modulesRouter } from "./api/modules";
 import { assessmentComponentsRouter } from "./api/assessmentComponents";
 import { classificationRouter } from "./api/classification";
+import { commitmentBlocksRouter } from "./api/commitmentBlocks";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -20,6 +21,7 @@ app.use("/api/universities", universitiesRouter);
 app.use("/api/modules", modulesRouter);
 app.use("/api/assessment-components", assessmentComponentsRouter);
 app.use("/api/classification", classificationRouter);
+app.use("/api/commitment-blocks", commitmentBlocksRouter);
 
 app.listen(PORT, () => {
   console.log(`Backend running at http://localhost:${PORT}`);
