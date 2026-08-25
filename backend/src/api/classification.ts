@@ -5,6 +5,7 @@ import {
   calculateModuleMark,
   calculateYearAverage,
   calculateRequiredYearAverage,
+  calculateRequiredAverageForRemainingModules,
   ModuleMarks,
 } from "../engine/calculations";
 
@@ -12,9 +13,6 @@ export const classificationRouter = Router();
 
 const LOCAL_USER_ID = "local-user";
 
-// GET /api/classification/status — the core "what's my current position"
-// endpoint. Pulls the user's modules, runs them through the classification
-// engine, and returns where they stand plus what they need going forward.
 classificationRouter.get("/status", async (_req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: LOCAL_USER_ID },
@@ -47,7 +45,6 @@ classificationRouter.get("/status", async (_req, res) => {
     include: { assessmentComponents: true },
   });
 
-  // Group modules by year, converting to the shape the engine expects.
   const moduleMarksByYear = new Map<number, ModuleMarks[]>();
   for (const module of modules) {
     const moduleMarks: ModuleMarks = {
@@ -62,8 +59,6 @@ classificationRouter.get("/status", async (_req, res) => {
     moduleMarksByYear.set(module.year, existing);
   }
 
-  // Work out which years are fully complete (every module in that year
-  // has a non-null average) versus not yet complete.
   const completedYears: { year: number; average: number }[] = [];
   const incompleteYears: number[] = [];
 
@@ -76,34 +71,86 @@ classificationRouter.get("/status", async (_req, res) => {
         completedYears.push({ year, average });
       }
     } catch (err) {
-      // A module with bad/incomplete data (e.g. no components yet, or
-      // weightings that don't sum to 100) shouldn't be able to crash
-      // the whole server — treat that year as incomplete and surface
-      // a clear warning instead of dying silently.
       console.error(`Year ${year} calculation error:`, err instanceof Error ? err.message : err);
       incompleteYears.push(year);
     }
   }
 
-  // For v1, keep this endpoint focused on the common case: report
-  // completed years plus, if there's exactly one incomplete year, the
-  // required average needed there. More complex multi-incomplete-year
-  // cases are left for later — this already covers the realistic case
-  // of "some years done, currently working through one more."
-  let requiredGoing: ReturnType<typeof calculateRequiredYearAverage> | null = null;
-  let targetYear: number | null = null;
+  // For v1, we resolve one target incomplete year — the realistic case
+  // of "working through the current year while others are settled."
+  // Multiple simultaneously-incomplete years is left for later, same
+  // simplification we've been explicit about throughout.
+  let requiredResult: {
+    year: number;
+    mode: "full_year" | "partial_year";
+    requiredAverage: number;
+    isAchievable: boolean;
+    alreadySecured: boolean;
+  } | null = null;
 
   if (incompleteYears.length === 1) {
-    targetYear = incompleteYears[0];
+    const targetYear = incompleteYears[0];
+    const targetModules = moduleMarksByYear.get(targetYear) ?? [];
+
+    // Split this year's modules into ones that are fully graded
+    // ("known") versus ones still missing a mark, so we can tell
+    // whether this is "year hasn't started" or "partway through."
+    const knownModules: ModuleMarks[] = [];
+    let remainingCredits = 0;
+
+    for (const m of targetModules) {
+      let mark: number | null;
+      try {
+        mark = calculateModuleMark(m);
+      } catch {
+        mark = null; // bad/incomplete component data — treat as ungraded
+      }
+      if (mark === null) {
+        remainingCredits += m.credits;
+      } else {
+        knownModules.push(m);
+      }
+    }
+
     try {
-      requiredGoing = calculateRequiredYearAverage(
-        completedYears,
-        targetYear,
-        user.targetClassification,
-        scheme
-      );
-    } catch {
-      requiredGoing = null;
+      if (knownModules.length === 0) {
+        // Genuinely nothing graded yet in this year — use the simpler
+        // "full year still open" calculation.
+        const result = calculateRequiredYearAverage(
+          completedYears,
+          targetYear,
+          user.targetClassification,
+          scheme
+        );
+        requiredResult = {
+          year: targetYear,
+          mode: "full_year",
+          requiredAverage: result.requiredAverage,
+          isAchievable: result.isAchievable,
+          alreadySecured: result.alreadySecured,
+        };
+      } else if (remainingCredits > 0) {
+        // Some modules graded, some not — the realistic mid-year case.
+        const result = calculateRequiredAverageForRemainingModules(
+          completedYears,
+          { year: targetYear, knownModules, remainingCredits },
+          user.targetClassification,
+          scheme
+        );
+        requiredResult = {
+          year: targetYear,
+          mode: "partial_year",
+          requiredAverage: result.requiredAverageOnRemaining,
+          isAchievable: result.isAchievable,
+          alreadySecured: result.alreadySecured,
+        };
+      }
+      // If knownModules.length > 0 and remainingCredits === 0, the year
+      // is actually fully graded and would have appeared in
+      // completedYears already — nothing more to compute here.
+    } catch (err) {
+      console.error("Required-average calculation error:", err instanceof Error ? err.message : err);
+      requiredResult = null;
     }
   }
 
@@ -111,8 +158,6 @@ classificationRouter.get("/status", async (_req, res) => {
     targetClassification: user.targetClassification,
     completedYears,
     incompleteYears,
-    requiredForRemainingYear: requiredGoing
-      ? { year: targetYear, ...requiredGoing }
-      : null,
+    requiredForRemainingYear: requiredResult,
   });
 });
