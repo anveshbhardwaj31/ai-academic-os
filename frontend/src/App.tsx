@@ -2,21 +2,30 @@ import { useEffect, useState } from "react";
 import {
   Module,
   ClassificationStatus,
+  CommitmentBlock,
+  ScheduleResponse,
   getModules,
   createModule,
   createAssessmentComponent,
   updateAssessmentComponentMark,
   getClassificationStatus,
+  getCommitmentBlocks,
+  createCommitmentBlock,
+  deleteCommitmentBlock,
+  generateTasks,
+  getSchedule,
 } from "./api";
 
-// Small reusable wrapper so every field gets a consistent label above it.
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function minutesToTime(totalMinutes: number): string {
+  const rounded = Math.round(totalMinutes / 5) * 5;
+  const hours = Math.floor(rounded / 60);
+  const minutes = rounded % 60;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="field-group">
       <span className="field-label">{label}</span>
@@ -28,6 +37,8 @@ function Field({
 export default function App() {
   const [modules, setModules] = useState<Module[]>([]);
   const [status, setStatus] = useState<ClassificationStatus | null>(null);
+  const [commitmentBlocks, setCommitmentBlocks] = useState<CommitmentBlock[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,15 +46,24 @@ export default function App() {
   const [moduleCredits, setModuleCredits] = useState(20);
   const [moduleYear, setModuleYear] = useState(3);
 
+  const [blockLabel, setBlockLabel] = useState("");
+  const [blockDay, setBlockDay] = useState(1);
+  const [blockStart, setBlockStart] = useState("09:00");
+  const [blockEnd, setBlockEnd] = useState("11:00");
+
   async function refreshAll() {
     setError(null);
     try {
-      const [modulesData, statusData] = await Promise.all([
+      const [modulesData, statusData, blocksData, scheduleData] = await Promise.all([
         getModules(),
         getClassificationStatus(),
+        getCommitmentBlocks(),
+        getSchedule(),
       ]);
       setModules(modulesData);
       setStatus(statusData);
+      setCommitmentBlocks(blocksData);
+      setSchedule(scheduleData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -63,10 +83,41 @@ export default function App() {
     await refreshAll();
   }
 
+  async function handleAddBlock(e: React.FormEvent) {
+    e.preventDefault();
+    if (!blockLabel.trim()) return;
+    try {
+      await createCommitmentBlock({
+        label: blockLabel,
+        dayOfWeek: blockDay,
+        startTime: blockStart,
+        endTime: blockEnd,
+      });
+      setBlockLabel("");
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add commitment block");
+    }
+  }
+
+  async function handleDeleteBlock(id: string) {
+    await deleteCommitmentBlock(id);
+    await refreshAll();
+  }
+
+  async function handleGenerateTasks(componentId: string) {
+    try {
+      await generateTasks(componentId);
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate tasks");
+    }
+  }
+
   if (loading) return <p style={{ padding: 24 }}>Loading…</p>;
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
       <h1>Academic Strategist</h1>
 
       {error && (
@@ -128,11 +179,7 @@ export default function App() {
             />
           </Field>
           <Field label="Year">
-            <select
-              value={moduleYear}
-              onChange={(e) => setModuleYear(Number(e.target.value))}
-              style={{ padding: 8 }}
-            >
+            <select value={moduleYear} onChange={(e) => setModuleYear(Number(e.target.value))} style={{ padding: 8 }}>
               <option value={1}>Year 1</option>
               <option value={2}>Year 2</option>
               <option value={3}>Year 3</option>
@@ -143,18 +190,111 @@ export default function App() {
         </form>
       </section>
 
-      <section>
+      <section style={{ marginBottom: 32 }}>
         <h2>Your modules</h2>
         {modules.length === 0 && <p>No modules yet — add one above.</p>}
         {modules.map((m) => (
-          <ModuleCard key={m.id} module={m} onChanged={refreshAll} />
+          <ModuleCard key={m.id} module={m} onChanged={refreshAll} onGenerateTasks={handleGenerateTasks} />
         ))}
+      </section>
+
+      <section style={{ marginBottom: 32 }}>
+        <h2>Fixed commitments</h2>
+        <p style={{ color: "#666", fontSize: 14 }}>
+          Classes, work, or anything else that blocks off time each week. The scheduler plans around these.
+        </p>
+        <form onSubmit={handleAddBlock} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+          <Field label="Label">
+            <input
+              placeholder="e.g. Lectures"
+              value={blockLabel}
+              onChange={(e) => setBlockLabel(e.target.value)}
+              style={{ padding: 8, minWidth: 160 }}
+            />
+          </Field>
+          <Field label="Day">
+            <select value={blockDay} onChange={(e) => setBlockDay(Number(e.target.value))} style={{ padding: 8 }}>
+              {DAY_NAMES.map((name, i) => (
+                <option key={i} value={i}>{name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Start time">
+            <input type="time" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} style={{ padding: 8 }} />
+          </Field>
+          <Field label="End time">
+            <input type="time" value={blockEnd} onChange={(e) => setBlockEnd(e.target.value)} style={{ padding: 8 }} />
+          </Field>
+          <button type="submit" style={{ padding: "8px 16px" }}>Add commitment</button>
+        </form>
+
+        {commitmentBlocks.length === 0 ? (
+          <p>No fixed commitments yet.</p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {commitmentBlocks.map((b) => (
+              <li key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0" }}>
+                <span style={{ flex: 1 }}>
+                  {DAY_NAMES[b.dayOfWeek]} · {b.startTime}–{b.endTime} · {b.label}
+                </span>
+                <button onClick={() => handleDeleteBlock(b.id)} style={{ padding: "4px 10px" }}>Remove</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>This week's schedule</h2>
+        {!schedule || (schedule.scheduled.length === 0 && schedule.unscheduled.length === 0) ? (
+          <p>No tasks scheduled yet — generate tasks for an assessment component above.</p>
+        ) : (
+          <>
+            {DAY_NAMES.map((dayName, dayIndex) => {
+              const dayTasks = schedule.scheduled
+                .filter((t) => t.dayOfWeek === dayIndex)
+                .sort((a, b) => a.startMinutes - b.startMinutes);
+              if (dayTasks.length === 0) return null;
+              return (
+                <div key={dayIndex} style={{ marginBottom: 16 }}>
+                  <h3 style={{ marginBottom: 4 }}>{dayName}</h3>
+                  <ul style={{ listStyle: "none", padding: 0 }}>
+                    {dayTasks.map((t) => (
+                      <li key={t.taskId} style={{ padding: "4px 0", borderBottom: "1px solid #eee" }}>
+                        {minutesToTime(t.startMinutes)}–{minutesToTime(t.endMinutes)} · <strong>{t.title}</strong> ({t.assessmentComponentName})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+
+            {schedule.unscheduled.length > 0 && (
+              <div style={{ marginTop: 16, padding: 12, background: "#fff8e1", borderRadius: 6 }}>
+                <strong>Couldn't fit this week:</strong>
+                <ul>
+                  {schedule.unscheduled.map((t) => (
+                    <li key={t.taskId}>{t.title} ({t.assessmentComponentName})</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
       </section>
     </div>
   );
 }
 
-function ModuleCard({ module, onChanged }: { module: Module; onChanged: () => void }) {
+function ModuleCard({
+  module,
+  onChanged,
+  onGenerateTasks,
+}: {
+  module: Module;
+  onChanged: () => void;
+  onGenerateTasks: (componentId: string) => void;
+}) {
   const [componentName, setComponentName] = useState("");
   const [weighting, setWeighting] = useState(50);
   const [type, setType] = useState<"coursework" | "exam">("coursework");
@@ -200,6 +340,9 @@ function ModuleCard({ module, onChanged }: { module: Module; onChanged: () => vo
               style={{ width: 70, padding: 6 }}
             />
           </Field>
+          <button onClick={() => onGenerateTasks(c.id)} style={{ padding: "6px 12px" }}>
+            Generate tasks
+          </button>
         </div>
       ))}
 
@@ -228,12 +371,7 @@ function ModuleCard({ module, onChanged }: { module: Module; onChanged: () => vo
           </select>
         </Field>
         <Field label="Deadline">
-          <input
-            type="date"
-            value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
-            style={{ padding: 6 }}
-          />
+          <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={{ padding: 6 }} />
         </Field>
         <button type="submit" style={{ padding: "6px 12px" }}>Add</button>
       </form>
