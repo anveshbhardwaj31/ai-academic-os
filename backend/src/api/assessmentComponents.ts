@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/client";
+import { generateTasksForComponent } from "../scheduling/taskGeneration";
 
 export const assessmentComponentsRouter = Router();
 
@@ -90,4 +91,60 @@ assessmentComponentsRouter.delete("/:id", async (req, res) => {
   } catch {
     res.status(404).json({ error: `Assessment component '${id}' not found` });
   }
+});
+
+// POST /api/assessment-components/:id/generate-tasks — generates and
+// saves a set of tasks for this component, based on its type and
+// weighting. Fails if tasks already exist, to avoid accidentally
+// duplicating a whole task set on a second click.
+assessmentComponentsRouter.post("/:id/generate-tasks", async (req, res) => {
+  const { id } = req.params;
+
+  const component = await prisma.assessmentComponent.findUnique({
+    where: { id },
+    include: { module: true, tasks: true },
+  });
+
+  if (!component) {
+    res.status(404).json({ error: `Assessment component '${id}' not found` });
+    return;
+  }
+
+  if (component.tasks.length > 0) {
+    res.status(409).json({
+      error: "Tasks already exist for this component. Delete them first if you want to regenerate.",
+    });
+    return;
+  }
+
+  const generated = generateTasksForComponent({
+    type: component.type as "coursework" | "exam",
+    weightingPct: component.weightingPct,
+    moduleCredits: component.module.credits,
+  });
+
+  const createdTasks = await prisma.$transaction(
+    generated.map((t) =>
+      prisma.task.create({
+        data: {
+          assessmentComponentId: component.id,
+          title: t.title,
+          type: t.type,
+          estimatedMinutes: t.estimatedMinutes,
+        },
+      })
+    )
+  );
+
+  res.status(201).json(createdTasks);
+});
+
+// GET /api/assessment-components/:id/tasks — list tasks for a component.
+assessmentComponentsRouter.get("/:id/tasks", async (req, res) => {
+  const { id } = req.params;
+  const tasks = await prisma.task.findMany({
+    where: { assessmentComponentId: id },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(tasks);
 });
