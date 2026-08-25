@@ -39,10 +39,16 @@ export interface FreeSlot {
    */
   function computeFreeSlotsForDay(
     dayOfWeek: number,
-    blocksForDay: CommitmentBlockInput[]
+    blocksForDay: CommitmentBlockInput[],
+    earliestStartOverride?: number
   ): FreeSlot[] {
-    const dayStart = 8 * 60; // 08:00
+    const defaultDayStart = 8 * 60; // 08:00
     const dayEnd = 23 * 60; // 23:00
+    const dayStart = earliestStartOverride !== undefined
+      ? Math.max(defaultDayStart, earliestStartOverride)
+      : defaultDayStart;
+    
+    if (dayStart >= dayEnd) return [];
   
     const sortedBlocks = [...blocksForDay].sort(
       (a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime)
@@ -72,11 +78,23 @@ export interface FreeSlot {
    * Computes free time across a whole week (all 7 days), given the
    * user's commitment blocks.
    */
-  export function computeWeeklyFreeSlots(commitmentBlocks: CommitmentBlockInput[]): FreeSlot[] {
+  export function computeWeeklyFreeSlots(
+    commitmentBlocks: CommitmentBlockInput[],
+    now: Date = new Date()
+  ): FreeSlot[] {
+    // Known v1 simplification: days are still visited Sunday-first (0-6),
+    // not reordered to start from today — so this prevents scheduling
+    // into already-past hours *within* today specifically, but doesn't
+    // yet prefer today/tomorrow over later days when placing tasks.
+    // Worth revisiting once this is in real use.
+    const todayDayOfWeek = now.getUTCDay();
+    const currentMinutesOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();
+  
     const allSlots: FreeSlot[] = [];
     for (let day = 0; day <= 6; day++) {
       const blocksForDay = commitmentBlocks.filter((b) => b.dayOfWeek === day);
-      allSlots.push(...computeFreeSlotsForDay(day, blocksForDay));
+      const earliestStartOverride = day === todayDayOfWeek ? currentMinutesOfDay : undefined;
+      allSlots.push(...computeFreeSlotsForDay(day, blocksForDay, earliestStartOverride));
     }
     return allSlots;
   }
@@ -105,7 +123,7 @@ export interface FreeSlot {
     commitmentBlocks: CommitmentBlockInput[],
     now: Date = new Date()
   ): { scheduled: ScheduledTask[]; unscheduled: SchedulableTask[] } {
-    const freeSlots = computeWeeklyFreeSlots(commitmentBlocks).map((s) => ({ ...s })); // mutable copies
+    const freeSlots = computeWeeklyFreeSlots(commitmentBlocks, now).map((s) => ({ ...s })); // mutable copies
   
     const sortedTasks = [...tasks].sort(
       (a, b) => priorityScore(b, now) - priorityScore(a, now)

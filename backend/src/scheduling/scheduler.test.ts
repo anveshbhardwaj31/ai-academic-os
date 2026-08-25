@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scheduleTasks, SchedulableTask, CommitmentBlockInput } from "./scheduler";
+import { scheduleTasks, SchedulableTask, CommitmentBlockInput, computeWeeklyFreeSlots } from "./scheduler";
 
 describe("scheduleTasks", () => {
   it("schedules by priority, skips a fully-blocked day, and leaves an oversized task unscheduled", () => {
@@ -81,5 +81,50 @@ describe("scheduleTasks", () => {
 
     expect(result.scheduled).toHaveLength(0);
     expect(result.unscheduled).toHaveLength(1);
+  });
+});
+
+describe("scheduleTasks — avoids scheduling into the past on the current day", () => {
+  it("doesn't offer free time earlier than the current moment on today", () => {
+    const now = new Date("2026-01-05T14:00:00.000Z"); // Monday, 14:00 UTC
+
+    // Block out Sunday entirely. The scheduler's v1 iteration order
+    // still walks Sunday-first regardless of "now" — it doesn't yet
+    // know Sunday has already passed this week — so blocking it here
+    // isolates the specific thing we actually fixed: today's own
+    // partial-day cutoff, not full week reordering (a known, deferred
+    // limitation noted in computeWeeklyFreeSlots).
+    const commitmentBlocks: CommitmentBlockInput[] = [
+      { dayOfWeek: 0, startTime: "08:00", endTime: "23:00" },
+    ];
+
+    const tasks: SchedulableTask[] = [
+      {
+        id: "task-today",
+        estimatedMinutes: 30,
+        deadline: new Date("2026-01-06T00:00:00.000Z"),
+        weightingPct: 50,
+      },
+    ];
+
+    const result = scheduleTasks(tasks, commitmentBlocks, now);
+
+    expect(result.scheduled).toHaveLength(1);
+    const scheduled = result.scheduled[0];
+
+    expect(scheduled.dayOfWeek).toBe(1);
+    expect(scheduled.startMinutes).toBeGreaterThanOrEqual(840);
+  });
+
+  it("correctly returns no free time today if 'now' is already past the working day end", () => {
+    // "Now" is Monday at 23:30 UTC — past the 23:00 cutoff.
+    const now = new Date("2026-01-05T23:30:00.000Z");
+    const commitmentBlocks: CommitmentBlockInput[] = [];
+
+    const freeSlots = computeWeeklyFreeSlots(commitmentBlocks, now);
+    const todaySlots = freeSlots.filter((s) => s.dayOfWeek === 1);
+
+    // No free slots should exist for today, since it's already past 23:00.
+    expect(todaySlots).toHaveLength(0);
   });
 });
