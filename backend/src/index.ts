@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { universitiesRouter } from "./api/universities";
 import { modulesRouter } from "./api/modules";
+import { assessmentComponentsRouter } from "./api/assessmentComponents";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -16,6 +17,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/universities", universitiesRouter);
 app.use("/api/modules", modulesRouter);
+app.use("/api/assessment-components", assessmentComponentsRouter);
 
 app.listen(PORT, () => {
   console.log(`Backend running at http://localhost:${PORT}`);
