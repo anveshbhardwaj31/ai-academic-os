@@ -185,3 +185,40 @@ export async function getRecommendation(): Promise<RecommendationResponse> {
   const res = await fetch("/api/recommendation");
   return handleResponse(res);
 }
+
+export interface University {
+  id: string;
+  name: string;
+}
+
+export interface UserSettings {
+  id: string;
+  name: string;
+  universityId: string;
+  currentYear: number;
+  targetClassification: string;
+  university: University;
+}
+
+export async function getUser(): Promise<UserSettings> {
+  const res = await fetch("/api/user");
+  return handleResponse(res);
+}
+
+export async function getUniversities(): Promise<University[]> {
+  const res = await fetch("/api/user/universities");
+  return handleResponse(res);
+}
+
+export async function updateUser(data: {
+  universityId?: string;
+  currentYear?: number;
+  targetClassification?: string;
+}): Promise<UserSettings> {
+  const res = await fetch("/api/user", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleResponse(res);
+}

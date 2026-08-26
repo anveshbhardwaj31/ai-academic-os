@@ -16,7 +16,13 @@ import {
   getSchedule,
   getRecommendation,
   RecommendationResponse,
+  getUser,
+  getUniversities,
+  updateUser,
+  UserSettings,
+  University,
 } from "./api";
+import { User } from "@prisma/client";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -42,6 +48,8 @@ export default function App() {
   const [commitmentBlocks, setCommitmentBlocks] = useState<CommitmentBlock[]>([]);
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+  const [universities, setUniversities] = useState<University[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,18 +65,22 @@ export default function App() {
   async function refreshAll() {
     setError(null);
     try {
-      const [modulesData, statusData, blocksData, scheduleData, recommendationData] = await Promise.all([
+      const [modulesData, statusData, blocksData, scheduleData, recommendationData, userData, universitiesData] = await Promise.all([
         getModules(),
         getClassificationStatus(),
         getCommitmentBlocks(),
         getSchedule(),
         getRecommendation(),
+        getUser(),
+        getUniversities(),
       ]);
       setModules(modulesData);
       setStatus(statusData);
       setCommitmentBlocks(blocksData);
       setSchedule(scheduleData);
       setRecommendation(recommendationData);
+      setUserSettings(userData);
+      setUniversities(universitiesData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -116,6 +128,15 @@ export default function App() {
       await refreshAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not generate tasks");
+    }
+  }
+
+  async function handleUpdateSettings(data: { universityId?: string; currentYear?: number; targetClassification?: string }) {
+    try {
+      await updateUser(data);
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update settings");
     }
   }
 
@@ -187,6 +208,49 @@ export default function App() {
           </>
         ) : (
           <p>No status available yet.</p>
+        )}
+      </section>
+
+      <section style={{ marginBottom: 32, padding: 16, background: "#f5f5f5", borderRadius: 8 }}>
+        <h2>Settings</h2>
+        {userSettings && (
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <Field label="University">
+              <select
+                value={userSettings.universityId}
+                onChange={(e) => handleUpdateSettings({ universityId: e.target.value })}
+                style={{ padding: 8 }}
+              >
+                {universities.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Current year">
+              <select
+                value={userSettings.currentYear}
+                onChange={(e) => handleUpdateSettings({ currentYear: Number(e.target.value) })}
+                style={{ padding: 8 }}
+              >
+                <option value={1}>Year 1</option>
+                <option value={2}>Year 2</option>
+                <option value={3}>Year 3</option>
+                <option value={4}>Year 4</option>
+              </select>
+            </Field>
+            <Field label="Target classification">
+              <select
+                value={userSettings.targetClassification}
+                onChange={(e) => handleUpdateSettings({ targetClassification: e.target.value })}
+                style={{ padding: 8 }}
+              >
+                <option value="First">First</option>
+                <option value="2:1">2:1</option>
+                <option value="2:2">2:2</option>
+                <option value="Third">Third</option>
+              </select>
+            </Field>
+          </div>
         )}
       </section>
 
