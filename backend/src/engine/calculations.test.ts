@@ -10,6 +10,7 @@ import {
   PartialYearProgress,
 } from "./calculations";
 import { kentClassificationScheme } from "./schemes/kent";
+import { uclClassificationScheme } from "./schemes/ucl";
 
 describe("calculateModuleMark", () => {
   it("calculates a weighted average across components correctly", () => {
@@ -264,5 +265,30 @@ describe("calculateRequiredAverageForRemainingModules", () => {
     //   (96.67 * 120 - 900) / 100 = (11600 - 900) / 100 = 107
     expect(result.requiredAverageOnRemaining).toBeGreaterThan(100);
     expect(result.isAchievable).toBe(false);
+  });
+});
+
+describe("calculateOverallClassification — works correctly against UCL's scheme too", () => {
+  it("calculates a 2:1 correctly under UCL's 37.5:62.5 weighting", () => {
+    const yearResults: YearResult[] = [
+      { year: 2, average: 58 },
+      { year: 3, average: 65 },
+    ];
+    const result = calculateOverallClassification(yearResults, uclClassificationScheme);
+
+    // (58 * 0.375) + (65 * 0.625) = 21.75 + 40.625 = 62.375
+    expect(result.overallPercentage).toBeCloseTo(62.375);
+    expect(result.classification).toBe("2:1");
+  });
+
+  it("calculates the required Year 3 average for a First under UCL's weighting", () => {
+    const completedYears: YearResult[] = [{ year: 2, average: 60 }];
+    const result = calculateRequiredYearAverage(completedYears, 3, "First", uclClassificationScheme);
+
+    // Secured from Year 2: 60 * 0.375 = 22.5
+    // Remaining needed: 70 - 22.5 = 47.5
+    // Required Year 3 average: 47.5 / 0.625 = 76
+    expect(result.requiredAverage).toBeCloseTo(76);
+    expect(result.isAchievable).toBe(true);
   });
 });
