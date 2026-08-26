@@ -9,6 +9,7 @@ import { scheduleRouter } from "./api/schedule";
 import { recommendationRouter } from "./api/recommendation";
 import { tasksRouter } from "./api/tasks";
 import { onTrackRouter } from "./api/onTrack";
+import { userRouter } from "./api/user";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -30,6 +31,7 @@ app.use("/api/schedule", scheduleRouter);
 app.use("/api/recommendation", recommendationRouter);
 app.use("/api/tasks", tasksRouter);
 app.use("/api/on-track", onTrackRouter);
+app.use("/api/user", userRouter);
 
 app.listen(PORT, () => {
   console.log(`Backend running at http://localhost:${PORT}`);

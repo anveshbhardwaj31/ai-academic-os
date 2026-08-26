@@ -1,31 +1,32 @@
 import { PrismaClient } from "@prisma/client";
 import { kentClassificationScheme } from "../src/engine/schemes/kent";
+import { uclClassificationScheme } from "../src/engine/schemes/ucl";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  const kent = await prisma.university.upsert({
-    where: { id: "kent" },
-    update: {},
-    create: {
-      id: "kent",
-      name: "University of Kent",
-    },
+async function seedUniversity(id: string, name: string, scheme: object) {
+  const university = await prisma.university.upsert({
+    where: { id },
+    update: { name },
+    create: { id, name },
   });
 
   await prisma.classificationScheme.upsert({
-    where: { universityId: kent.id },
-    update: {
-      rulesJson: JSON.stringify(kentClassificationScheme),
-    },
-    create: {
-      universityId: kent.id,
-      rulesJson: JSON.stringify(kentClassificationScheme),
-    },
+    where: { universityId: university.id },
+    update: { rulesJson: JSON.stringify(scheme) },
+    create: { universityId: university.id, rulesJson: JSON.stringify(scheme) },
   });
 
-  // A single local user, since v1 has no auth — this stands in for
-  // "you" until multi-user support is ever built.
+  return university;
+}
+
+async function main() {
+  const kent = await seedUniversity("kent", "University of Kent", kentClassificationScheme);
+  await seedUniversity("ucl", "University College London", uclClassificationScheme);
+
+  // The local user defaults to Kent — this is just a starting point,
+  // not a permanent choice. The user router (built next) lets it
+  // actually be changed through the app itself.
   await prisma.user.upsert({
     where: { id: "local-user" },
     update: {},
@@ -38,7 +39,7 @@ async function main() {
     },
   });
 
-  console.log("Seeded University of Kent, its classification scheme, and a local user.");
+  console.log("Seeded University of Kent, University College London, their classification schemes, and a local user.");
 }
 
 main()
