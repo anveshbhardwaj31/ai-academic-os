@@ -43,7 +43,6 @@ This is a working local prototype, not a finished product. Deliberate, documente
 - **Scheduler doesn't yet reorder the week relative to "today."** It correctly avoids scheduling into already-passed hours today, but still walks the week in fixed day order.
 - **No document upload / AI extraction feature.** This would require a paid LLM API integration; deliberately cut to keep the project entirely free to run.
 
-Full task-by-task roadmap and design reasoning are in [`/docs`](./docs).
 
 ## Running it locally
 
