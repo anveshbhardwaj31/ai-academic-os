@@ -4,6 +4,8 @@ An AI-assisted academic planning tool for UK university students that understand
 
 **Status:** actively in development, running locally. Not yet deployed — see [Status](#status--known-limitations) below for why, and what's genuinely done vs. in progress.
 
+![Academic Strategist home view showing the recommendation card and current classification position](./docs/screenshots/dashboard.png)
+
 ## Why this exists
 
 Most student planning tools (Notion, generic to-do apps, even most "AI study planner" products) treat every university the same way: a flat GPA or percentage average. UK degree classification doesn't work like that — it's credit-weighted, year-weighted differently per institution, and the exact rules genuinely vary between universities. This project models that properly: a configurable classification engine that calculates real, correct answers to "what do I need to get a First?" for a specific university's actual published rules, verified against two structurally different real schemes (University of Kent's percentage-based year weighting, and UCL's ratio-based weighting) — proven to work through the same, unmodified calculation code for both.
@@ -15,6 +17,10 @@ Most student planning tools (Notion, generic to-do apps, even most "AI study pla
 - **"What should I do right now"** — a single, explained recommendation, not a list — the core idea the whole project is built around.
 - **Adaptive pace learning** — tracks real time spent vs. estimated per task type, with a minimum-sample-size safeguard before it trusts learned data over the original estimate (deliberately cautious about acting on too little evidence).
 - **Multi-university support** — classification rules are stored as configuration, not hardcoded logic, so a second university (UCL) works correctly through the exact same engine with zero code changes.
+
+![The recommendation card and weekly schedule view](./docs/screenshots/schedule.png)
+
+![48 passing tests covering the classification engine, scheduler, and pace-learning logic](./docs/screenshots/tests-passing.png)
 
 ## Tech stack
 
