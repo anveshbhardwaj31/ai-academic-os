@@ -4,6 +4,9 @@ import {
   ClassificationStatus,
   CommitmentBlock,
   ScheduleResponse,
+  RecommendationResponse,
+  UserSettings,
+  University,
   getModules,
   createModule,
   createAssessmentComponent,
@@ -15,14 +18,10 @@ import {
   generateTasks,
   getSchedule,
   getRecommendation,
-  RecommendationResponse,
   getUser,
   getUniversities,
   updateUser,
-  UserSettings,
-  University,
 } from "./api";
-import { User } from "@prisma/client";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -65,15 +64,16 @@ export default function App() {
   async function refreshAll() {
     setError(null);
     try {
-      const [modulesData, statusData, blocksData, scheduleData, recommendationData, userData, universitiesData] = await Promise.all([
-        getModules(),
-        getClassificationStatus(),
-        getCommitmentBlocks(),
-        getSchedule(),
-        getRecommendation(),
-        getUser(),
-        getUniversities(),
-      ]);
+      const [modulesData, statusData, blocksData, scheduleData, recommendationData, userData, universitiesData] =
+        await Promise.all([
+          getModules(),
+          getClassificationStatus(),
+          getCommitmentBlocks(),
+          getSchedule(),
+          getRecommendation(),
+          getUser(),
+          getUniversities(),
+        ]);
       setModules(modulesData);
       setStatus(statusData);
       setCommitmentBlocks(blocksData);
@@ -104,12 +104,7 @@ export default function App() {
     e.preventDefault();
     if (!blockLabel.trim()) return;
     try {
-      await createCommitmentBlock({
-        label: blockLabel,
-        dayOfWeek: blockDay,
-        startTime: blockStart,
-        endTime: blockEnd,
-      });
+      await createCommitmentBlock({ label: blockLabel, dayOfWeek: blockDay, startTime: blockStart, endTime: blockEnd });
       setBlockLabel("");
       await refreshAll();
     } catch (err) {
@@ -140,86 +135,71 @@ export default function App() {
     }
   }
 
-  if (loading) return <p style={{ padding: 24 }}>Loading…</p>;
+  if (loading) return <div className="app-shell">Loading…</div>;
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
-      <h1>Academic Strategist</h1>
+    <div className="app-shell">
+      <div className="masthead">
+        <h1 className="masthead-name">Academic Strategist</h1>
+        <span className="masthead-tag">{userSettings?.university.name}</span>
+      </div>
 
-      {recommendation?.recommendation && (
-        <section
-          style={{
-            marginBottom: 32,
-            padding: 24,
-            background: "#1a1a1a",
-            color: "#fff",
-            borderRadius: 12,
-          }}
-        >
-          <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.05em", color: "#aaa", marginBottom: 8 }}>
-            Right now
-          </div>
-          <h2 style={{ margin: "0 0 8px 0" }}>{recommendation.recommendation.task.title}</h2>
-          <p style={{ margin: 0, color: "#ddd" }}>{recommendation.recommendation.explanation}</p>
-          <p style={{ margin: "8px 0 0 0", fontSize: 14, color: "#999" }}>
-            Estimated {recommendation.recommendation.task.estimatedMinutes} minutes
-          </p>
-        </section>
+      {error && <div className="error-banner">{error}</div>}
+
+      {recommendation?.recommendation ? (
+        <div className="recommendation">
+          <div className="recommendation-eyebrow">Right now</div>
+          <h2 className="recommendation-title">{recommendation.recommendation.task.title}</h2>
+          <p className="recommendation-explanation">{recommendation.recommendation.explanation}</p>
+          <p className="recommendation-meta">Estimated {recommendation.recommendation.task.estimatedMinutes} minutes</p>
+        </div>
+      ) : (
+        recommendation && <div className="recommendation-empty">{recommendation.message}</div>
       )}
 
-      {recommendation && !recommendation.recommendation && (
-        <section style={{ marginBottom: 32, padding: 24, background: "#f0f0f0", borderRadius: 12 }}>
-          <p style={{ margin: 0, color: "#666" }}>{recommendation.message}</p>
-        </section>
-      )}
-
-      {error && (
-        <p style={{ color: "#b00020", background: "#fde8e8", padding: 12, borderRadius: 6 }}>
-          {error}
-        </p>
-      )}
-
-      <section style={{ marginBottom: 32, padding: 16, background: "#f5f5f5", borderRadius: 8 }}>
-        <h2>Your current position</h2>
-        {status ? (
+      <section className="section">
+        <h2 className="section-title">Your current position</h2>
+        <hr className="rule" />
+        {status && (
           <>
-            <p>Target classification: <strong>{status.targetClassification}</strong></p>
-            {status.completedYears.length > 0 ? (
-              <ul>
-                {status.completedYears.map((y) => (
-                  <li key={y.year}>Year {y.year} average: {y.average.toFixed(1)}%</li>
-                ))}
-              </ul>
-            ) : (
-              <p>No fully completed years yet.</p>
-            )}
-            {status.requiredForRemainingYear && (
-              <p>
-                For Year {status.requiredForRemainingYear.year}, you need an average of{" "}
-                <strong>{status.requiredForRemainingYear.requiredAverage.toFixed(1)}%</strong>{" "}
-                to hit a {status.targetClassification}.{" "}
-                {!status.requiredForRemainingYear.isAchievable && (
-                  <span style={{ color: "#b00020" }}>
-                    That's above 100% — not achievable with this target given current marks.
+            <div className="position-grid">
+              {status.completedYears.map((y) => (
+                <div className="position-figure" key={y.year}>
+                  <span className="position-figure-label">Year {y.year} average</span>
+                  <span className="position-figure-value">{y.average.toFixed(1)}%</span>
+                </div>
+              ))}
+              {status.requiredForRemainingYear && (
+                <div className="position-figure">
+                  <span className="position-figure-label">
+                    Needed in Year {status.requiredForRemainingYear.year} for a {status.targetClassification}
                   </span>
-                )}
+                  <span className="position-figure-value is-target">
+                    {status.requiredForRemainingYear.requiredAverage.toFixed(1)}%
+                  </span>
+                </div>
+              )}
+            </div>
+            {status.completedYears.length === 0 && <p className="position-note">No fully completed years yet.</p>}
+            {status.requiredForRemainingYear && !status.requiredForRemainingYear.isAchievable && (
+              <p className="position-note is-warning">
+                That's above 100% — not achievable for a {status.targetClassification} given current marks.
               </p>
             )}
           </>
-        ) : (
-          <p>No status available yet.</p>
         )}
       </section>
 
-      <section style={{ marginBottom: 32, padding: 16, background: "#f5f5f5", borderRadius: 8 }}>
-        <h2>Settings</h2>
+      <section className="section">
+        <h2 className="section-title">Settings</h2>
+        <hr className="rule" />
         {userSettings && (
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div className="form-row">
             <Field label="University">
               <select
+                className="input"
                 value={userSettings.universityId}
                 onChange={(e) => handleUpdateSettings({ universityId: e.target.value })}
-                style={{ padding: 8 }}
               >
                 {universities.map((u) => (
                   <option key={u.id} value={u.id}>{u.name}</option>
@@ -228,9 +208,9 @@ export default function App() {
             </Field>
             <Field label="Current year">
               <select
+                className="input"
                 value={userSettings.currentYear}
                 onChange={(e) => handleUpdateSettings({ currentYear: Number(e.target.value) })}
-                style={{ padding: 8 }}
               >
                 <option value={1}>Year 1</option>
                 <option value={2}>Year 2</option>
@@ -240,9 +220,9 @@ export default function App() {
             </Field>
             <Field label="Target classification">
               <select
+                className="input"
                 value={userSettings.targetClassification}
                 onChange={(e) => handleUpdateSettings({ targetClassification: e.target.value })}
-                style={{ padding: 8 }}
               >
                 <option value="First">First</option>
                 <option value="2:1">2:1</option>
@@ -254,96 +234,100 @@ export default function App() {
         )}
       </section>
 
-      <section style={{ marginBottom: 32 }}>
-        <h2>Add a module</h2>
-        <form onSubmit={handleAddModule} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+      <section className="section">
+        <h2 className="section-title">Add a module</h2>
+        <hr className="rule" />
+        <form onSubmit={handleAddModule} className="form-row">
           <Field label="Module name">
             <input
+              className="input"
               placeholder="e.g. Software Engineering"
               value={moduleName}
               onChange={(e) => setModuleName(e.target.value)}
-              style={{ padding: 8, minWidth: 220 }}
+              style={{ minWidth: 220 }}
             />
           </Field>
           <Field label="Credits">
             <input
+              className="input"
               type="number"
               value={moduleCredits}
               onFocus={(e) => e.target.select()}
               onChange={(e) => setModuleCredits(Number(e.target.value))}
-              style={{ width: 80, padding: 8 }}
+              style={{ width: 70 }}
             />
           </Field>
           <Field label="Year">
-            <select value={moduleYear} onChange={(e) => setModuleYear(Number(e.target.value))} style={{ padding: 8 }}>
+            <select className="input" value={moduleYear} onChange={(e) => setModuleYear(Number(e.target.value))}>
               <option value={1}>Year 1</option>
               <option value={2}>Year 2</option>
               <option value={3}>Year 3</option>
               <option value={4}>Year 4</option>
             </select>
           </Field>
-          <button type="submit" style={{ padding: "8px 16px" }}>Add module</button>
+          <button type="submit" className="btn">Add module</button>
         </form>
       </section>
 
-      <section style={{ marginBottom: 32 }}>
-        <h2>Your modules</h2>
-        {modules.length === 0 && <p>No modules yet — add one above.</p>}
+      <section className="section">
+        <h2 className="section-title">Your modules</h2>
+        <hr className="rule" />
+        {modules.length === 0 && <p className="position-note">No modules yet — add one above.</p>}
         {modules.map((m) => (
-          <ModuleCard key={m.id} module={m} onChanged={refreshAll} onGenerateTasks={handleGenerateTasks} />
+          <ModuleBlock key={m.id} module={m} onChanged={refreshAll} onGenerateTasks={handleGenerateTasks} />
         ))}
       </section>
 
-      <section style={{ marginBottom: 32 }}>
-        <h2>Fixed commitments</h2>
-        <p style={{ color: "#666", fontSize: 14 }}>
-          Classes, work, or anything else that blocks off time each week. The scheduler plans around these.
-        </p>
-        <form onSubmit={handleAddBlock} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+      <section className="section">
+        <h2 className="section-title">Fixed commitments</h2>
+        <hr className="rule" />
+        <form onSubmit={handleAddBlock} className="form-row" style={{ marginBottom: 16 }}>
           <Field label="Label">
             <input
+              className="input"
               placeholder="e.g. Lectures"
               value={blockLabel}
               onChange={(e) => setBlockLabel(e.target.value)}
-              style={{ padding: 8, minWidth: 160 }}
+              style={{ minWidth: 160 }}
             />
           </Field>
           <Field label="Day">
-            <select value={blockDay} onChange={(e) => setBlockDay(Number(e.target.value))} style={{ padding: 8 }}>
+            <select className="input" value={blockDay} onChange={(e) => setBlockDay(Number(e.target.value))}>
               {DAY_NAMES.map((name, i) => (
                 <option key={i} value={i}>{name}</option>
               ))}
             </select>
           </Field>
           <Field label="Start time">
-            <input type="time" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} style={{ padding: 8 }} />
+            <input className="input" type="time" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} />
           </Field>
           <Field label="End time">
-            <input type="time" value={blockEnd} onChange={(e) => setBlockEnd(e.target.value)} style={{ padding: 8 }} />
+            <input className="input" type="time" value={blockEnd} onChange={(e) => setBlockEnd(e.target.value)} />
           </Field>
-          <button type="submit" style={{ padding: "8px 16px" }}>Add commitment</button>
+          <button type="submit" className="btn">Add commitment</button>
         </form>
 
         {commitmentBlocks.length === 0 ? (
-          <p>No fixed commitments yet.</p>
+          <p className="position-note">No fixed commitments yet.</p>
         ) : (
-          <ul style={{ listStyle: "none", padding: 0 }}>
+          <ul className="commitment-list">
             {commitmentBlocks.map((b) => (
-              <li key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0" }}>
-                <span style={{ flex: 1 }}>
+              <li className="commitment-row" key={b.id}>
+                <span className="commitment-row-label">
                   {DAY_NAMES[b.dayOfWeek]} · {b.startTime}–{b.endTime} · {b.label}
                 </span>
-                <button onClick={() => handleDeleteBlock(b.id)} style={{ padding: "4px 10px" }}>Remove</button>
+                <button className="btn btn-quiet" onClick={() => handleDeleteBlock(b.id)}>Remove</button>
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      <section>
-        <h2>This week's schedule</h2>
+      <section className="section">
+        <h2 className="section-title">This week's schedule</h2>
+        <hr className="rule" />
         {!schedule || (schedule.scheduled.length === 0 && schedule.unscheduled.length === 0) ? (
-          <p>No tasks scheduled yet — generate tasks for an assessment component above.</p>
+          <p className="position-note">No tasks scheduled yet — generate tasks for an assessment component above.</p>
         ) : (
           <>
             {DAY_NAMES.map((dayName, dayIndex) => {
@@ -352,27 +336,25 @@ export default function App() {
                 .sort((a, b) => a.startMinutes - b.startMinutes);
               if (dayTasks.length === 0) return null;
               return (
-                <div key={dayIndex} style={{ marginBottom: 16 }}>
-                  <h3 style={{ marginBottom: 4 }}>{dayName}</h3>
-                  <ul style={{ listStyle: "none", padding: 0 }}>
-                    {dayTasks.map((t) => (
-                      <li key={t.taskId} style={{ padding: "4px 0", borderBottom: "1px solid #eee" }}>
-                        {minutesToTime(t.startMinutes)}–{minutesToTime(t.endMinutes)} · <strong>{t.title}</strong> ({t.assessmentComponentName})
-                      </li>
-                    ))}
-                  </ul>
+                <div className="day-block" key={dayIndex}>
+                  <h3 className="day-name">{dayName}</h3>
+                  {dayTasks.map((t) => (
+                    <div className="task-row" key={t.taskId}>
+                      <span className="task-time">{minutesToTime(t.startMinutes)}–{minutesToTime(t.endMinutes)}</span>
+                      <span className="task-title">{t.title}</span>
+                      <span className="task-context">{t.assessmentComponentName}</span>
+                    </div>
+                  ))}
                 </div>
               );
             })}
 
             {schedule.unscheduled.length > 0 && (
-              <div style={{ marginTop: 16, padding: 12, background: "#fff8e1", borderRadius: 6 }}>
-                <strong>Couldn't fit this week:</strong>
-                <ul>
-                  {schedule.unscheduled.map((t) => (
-                    <li key={t.taskId}>{t.title} ({t.assessmentComponentName})</li>
-                  ))}
-                </ul>
+              <div className="unscheduled-block">
+                <strong>Couldn't fit this week</strong>
+                {schedule.unscheduled.map((t) => (
+                  <div key={t.taskId} style={{ marginTop: 6 }}>{t.title} · {t.assessmentComponentName}</div>
+                ))}
               </div>
             )}
           </>
@@ -382,7 +364,7 @@ export default function App() {
   );
 }
 
-function ModuleCard({
+function ModuleBlock({
   module,
   onChanged,
   onGenerateTasks,
@@ -419,57 +401,57 @@ function ModuleCard({
   }
 
   return (
-    <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-      <h3>{module.name} <span style={{ fontWeight: "normal", color: "#666" }}>· {module.credits} credits · Year {module.year}</span></h3>
+    <div className="module-block">
+      <div className="module-heading">
+        <h3 className="module-name">{module.name}</h3>
+        <span className="module-meta">{module.credits} credits · Year {module.year}</span>
+      </div>
 
-      {module.assessmentComponents.length === 0 && <p>No assessment components yet.</p>}
       {module.assessmentComponents.map((c) => (
-        <div key={c.id} style={{ display: "flex", gap: 12, alignItems: "flex-end", marginBottom: 8 }}>
-          <span style={{ flex: 1 }}>{c.name} ({c.weightingPct}%, {c.type})</span>
-          <Field label="Mark">
-            <input
-              type="number"
-              placeholder="—"
-              defaultValue={c.mark ?? ""}
-              onFocus={(e) => e.target.select()}
-              onBlur={(e) => e.target.value && handleMarkChange(c.id, e.target.value)}
-              style={{ width: 70, padding: 6 }}
-            />
-          </Field>
-          <button onClick={() => onGenerateTasks(c.id)} style={{ padding: "6px 12px" }}>
-            Generate tasks
-          </button>
+        <div className="component-row" key={c.id}>
+          <span className="component-name">{c.name} ({c.weightingPct}%, {c.type})</span>
+          <input
+            className="input component-mark-input"
+            type="number"
+            placeholder="—"
+            defaultValue={c.mark ?? ""}
+            onFocus={(e) => e.target.select()}
+            onBlur={(e) => e.target.value && handleMarkChange(c.id, e.target.value)}
+          />
+          <button className="btn btn-quiet" onClick={() => onGenerateTasks(c.id)}>Generate tasks</button>
         </div>
       ))}
 
-      <form onSubmit={handleAddComponent} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", marginTop: 12 }}>
+      <form onSubmit={handleAddComponent} className="form-row" style={{ marginTop: 12 }}>
         <Field label="Component name">
           <input
+            className="input"
             placeholder="e.g. Coursework Essay"
             value={componentName}
             onChange={(e) => setComponentName(e.target.value)}
-            style={{ padding: 6, minWidth: 180 }}
+            style={{ minWidth: 180 }}
           />
         </Field>
         <Field label="Weighting %">
           <input
+            className="input"
             type="number"
             value={weighting}
             onFocus={(e) => e.target.select()}
             onChange={(e) => setWeighting(Number(e.target.value))}
-            style={{ width: 90, padding: 6 }}
+            style={{ width: 80 }}
           />
         </Field>
         <Field label="Type">
-          <select value={type} onChange={(e) => setType(e.target.value as "coursework" | "exam")} style={{ padding: 6 }}>
+          <select className="input" value={type} onChange={(e) => setType(e.target.value as "coursework" | "exam")}>
             <option value="coursework">Coursework</option>
             <option value="exam">Exam</option>
           </select>
         </Field>
         <Field label="Deadline">
-          <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={{ padding: 6 }} />
+          <input className="input" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </Field>
-        <button type="submit" style={{ padding: "6px 12px" }}>Add</button>
+        <button type="submit" className="btn btn-quiet">Add</button>
       </form>
     </div>
   );
